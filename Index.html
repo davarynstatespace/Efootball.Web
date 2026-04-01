@@ -1,0 +1,121 @@
+<!DOCTYPE html><html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>E-Football Pro Online</title>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+<style>
+body { margin:0; background:#0b6623; color:white; font-family:sans-serif; overflow:hidden; }
+canvas { display:block; margin:auto; background:#1e7d3a; }
+#ui { position:fixed; top:0; width:100%; text-align:center; background:rgba(0,0,0,0.4); }
+</style>
+</head>
+<body>
+<div id="ui">
+<h3>⚽ E-Football Pro Online</h3>
+<p id="room"></p>
+</div>
+<canvas id="game" width="360" height="600">
+</canvas>
+ <script>
+// ✅ YOUR FIREBASE CONFIG (FIXED)
+const firebaseConfig = {
+  apiKey: "AIzaSyAbHb0hg5bUbL9FbCbQMKLra86J-4K51_M",
+  authDomain: "efootball-pro.firebaseapp.com",
+  databaseURL: "https://efootball-pro-default-rtdb.firebaseio.com",
+  projectId: "efootball-pro",
+  storageBucket: "efootball-pro.firebasestorage.app",
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ROOM + PLAYER
+let params = new URLSearchParams(location.search);
+let room = params.get("room") || Math.random().toString(36).substr(2,5);
+let isHost = !params.get("room");
+let playerId = Math.random().toString(36).substr(2,5);
+document.getElementById("room").innerText = "Room: " + room;
+
+// GAME
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let player = {x:150, y:500, speed:4};
+let opponent = {x:150, y:50};
+let ball = {x:180, y:300, vx:3, vy:3};
+let targetX=150, targetY=50;
+
+// SEND PLAYER DATA
+function syncPlayer(){
+ db.ref("rooms/"+room+"/players/"+playerId).set({
+   x: player.x,
+   y: player.y
+ });
+}
+
+// LISTEN PLAYERS
+ db.ref("rooms/"+room+"/players").on("value", snap=>{
+ let players = snap.val();
+ if(!players) return;
+
+ for(let id in players){
+  if(id !== playerId){
+    targetX = players[id].x;
+    targetY = players[id].y;
+  }
+ }
+});
+
+// BALL CONTROL (HOST ONLY)
+if(isHost){
+ setInterval(()=>{
+  ball.x += ball.vx;
+  ball.y += ball.vy;
+
+  if(ball.x<0||ball.x>360) ball.vx*=-1;
+  if(ball.y<0||ball.y>600) ball.vy*=-1;
+
+  db.ref("rooms/"+room+"/ball").set(ball);
+ },50);
+}
+
+// LISTEN BALL
+ db.ref("rooms/"+room+"/ball").on("value", snap=>{
+ if(!isHost && snap.val()){
+  ball = snap.val();
+ }
+});
+
+// CONTROLS
+canvas.addEventListener("touchmove", e=>{
+ let t = e.touches[0];
+ player.x = t.clientX - 50;
+ player.y = t.clientY - 100;
+});
+
+// DRAW
+function draw(){
+ ctx.clearRect(0,0,360,600);
+
+ opponent.x += (targetX - opponent.x)*0.2;
+ opponent.y += (targetY - opponent.y)*0.2;
+
+ ctx.fillStyle="blue";
+ ctx.fillRect(player.x, player.y, 40,40);
+
+ ctx.fillStyle="red";
+ ctx.fillRect(opponent.x, opponent.y, 40,40);
+
+ ctx.beginPath();
+ ctx.arc(ball.x, ball.y, 10, 0, Math.PI*2);
+ ctx.fillStyle="white";
+ ctx.fill();
+}
+
+function loop(){ draw(); requestAnimationFrame(loop); }
+loop();
+
+setInterval(syncPlayer,50);
+</script>
+</body>
+</html>
